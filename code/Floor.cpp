@@ -1,8 +1,7 @@
 #include "Floor.h"
 
-Floor::Floor(Shader _shader, unsigned int woodTexture, unsigned int depthMap):shader(_shader){
+Floor::Floor(unsigned int woodTexture){
 	this->woodTexture = woodTexture;
-	this->depthMap = depthMap;
 	aoTexture = loadTexture(FileSystem::getPath("resources/textures/ao.png").c_str());
 
 	glGenVertexArrays(1, &planeVAO1);
@@ -43,14 +42,14 @@ Floor::~Floor()
 	glDeleteBuffers(1, &planeVBO2);
 }
 
-void Floor::renderFloor() {
+void Floor::renderFloor(Shader& _shader) {
 	glActiveTexture(GL_TEXTURE0);
 	glBindTexture(GL_TEXTURE_2D, woodTexture);
 	glActiveTexture(GL_TEXTURE1);
 	glBindTexture(GL_TEXTURE_2D, depthMap);
 	// floor
 	glm::mat4 model = glm::mat4(1.0f);
-	shader.setMat4("model", model);
+	_shader.setMat4("model", model);
 	glBindVertexArray(planeVAO1);
 	glDrawArrays(GL_TRIANGLES, 0, 6);
 
@@ -58,6 +57,10 @@ void Floor::renderFloor() {
 	glBindTexture(GL_TEXTURE_2D, aoTexture);
 	glBindVertexArray(planeVAO2);
 	glDrawArrays(GL_TRIANGLES, 0, 6);
+}
+
+void Floor::setDepthMap(unsigned int _depthMap) {
+	depthMap = _depthMap;
 }
 
 

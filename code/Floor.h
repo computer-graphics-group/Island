@@ -5,12 +5,12 @@
 class Floor
 {
 public:
-	Floor(Shader shader, unsigned int texture1, unsigned int depthMap);
+	Floor(unsigned int texture1);
 	~Floor();
-	void renderFloor();
+	void renderFloor(Shader& _shader);
+	void setDepthMap(unsigned int depthMap);
 
 private:
-	Shader shader;
 	// meshes
 	unsigned int planeVAO1, planeVAO2;
 	// plane VAO

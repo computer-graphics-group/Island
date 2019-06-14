@@ -172,11 +172,11 @@ int main()
 	unsigned int cubemapTexture = loadCubemap(faces);
     // set up vertex data (and buffer(s)) and configure vertex attributes
     // ------------------------------------------------------------------
-    
+	
     // load textures
     // -------------
     unsigned int woodTexture = loadTexture(FileSystem::getPath("resources/textures/grassround.png").c_str());
-
+	Floor floor = Floor(woodTexture);
     // configure depth map FBO
     // -----------------------
     const unsigned int SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
@@ -200,7 +200,7 @@ int main()
     glReadBuffer(GL_NONE);
     glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
-	Floor floor = Floor(shader, woodTexture, depthMap);
+	floor.setDepthMap(depthMap);
     // shader configuration
     // --------------------
     shader.use();
@@ -257,7 +257,7 @@ int main()
         glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
             glClear(GL_DEPTH_BUFFER_BIT);
 			glCullFace(GL_FRONT);
-			floor.renderFloor();
+			floor.renderFloor(simpleDepthShader);
 			glActiveTexture(GL_TEXTURE0);
 			glBindTexture(GL_TEXTURE_2D, woodTexture);
             renderScene(simpleDepthShader);
@@ -281,7 +281,7 @@ int main()
         shader.setVec3("viewPos", camera.Position);
         shader.setVec3("lightPos", lightPos);
         shader.setMat4("lightSpaceMatrix", lightSpaceMatrix);
-        floor.renderFloor();
+        floor.renderFloor(shader);
 		glActiveTexture(GL_TEXTURE0);
         glBindTexture(GL_TEXTURE_2D, woodTexture);
         glActiveTexture(GL_TEXTURE1);
