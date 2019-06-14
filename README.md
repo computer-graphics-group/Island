@@ -75,9 +75,19 @@
     }
     ```
 
-  - 
+  - 天空盒使用立方体的位置作为纹理坐标来采样。顶点着色器将输入的位置向量作为输出给片段着色器的纹理坐标。片段着色器会将它作为输入来采样。
 
-  - 天空盒显示:
+  - 天空盒显示：天空盒绑定立方体贴图纹理，将它变为场景中的第一个渲染的物体，并且禁用深度写入，以此实现天空盒被绘制在其他物体背后。
+
+    ```c++
+    glDepthMask(GL_FALSE);
+    skyboxShader.use();
+    // ... 设置观察和投影矩阵
+    glBindVertexArray(skyboxVAO);
+    glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+    glDrawArrays(GL_TRIANGLES, 0, 36);
+    glDepthMask(GL_TRUE);
+    ```
 
 - 文字显示（尚未完成）
 
