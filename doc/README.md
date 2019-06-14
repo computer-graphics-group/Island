@@ -131,9 +131,9 @@
 ```
 
 ## 实现结果
-![](doc/pictures/1.PNG)  
-![](doc/pictures/2.PNG)  
-![](doc/pictures/3.PNG)  
+![](pictures/1.PNG)  
+![](pictures/2.PNG)  
+![](pictures/3.PNG)  
 
 ## 成员分工
 **第一阶段实现**
