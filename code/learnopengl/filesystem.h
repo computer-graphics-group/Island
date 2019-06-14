@@ -3,7 +3,6 @@
 
 #include <string>
 #include <cstdlib>
-const char * logl_root = "F:\OpenGL\Projects\Demo\Demo";
 
 class FileSystem
 {
@@ -21,6 +20,7 @@ private:
   static std::string const & getRoot()
   {
     static char const * envRoot = getenv("LOGL_ROOT_PATH");
+	const char * logl_root = "F:/OpenGL/Projects/Demo/Demo";
     static char const * givenRoot = (envRoot != nullptr ? envRoot : logl_root);
     static std::string root = (givenRoot != nullptr ? givenRoot : "");
     return root;
