@@ -29,7 +29,7 @@ const unsigned int SCR_WIDTH = 1280;
 const unsigned int SCR_HEIGHT = 720;
 
 // camera
-Camera camera(glm::vec3(0.0f, 12.0f, 3.0f));
+Camera camera(glm::vec3(1.0f, 0.1f, 2.0));
 float lastX = (float)SCR_WIDTH / 2.0;
 float lastY = (float)SCR_HEIGHT / 2.0;
 bool firstMouse = true;
@@ -100,10 +100,7 @@ int main()
 	Model ourModel5(FileSystem::getPath("resources/objects/ghost10.obj"));
 	Model ourModel6(FileSystem::getPath("resources/objects/ghost11.obj"));
 
-	Model ourOcean1(FileSystem::getPath("resources/objects/todo/ocean1.obj"));
-	Model ourOcean2(FileSystem::getPath("resources/objects/todo/ocean2.obj"));
-	Model ourOcean3(FileSystem::getPath("resources/objects/todo/ocean3.obj"));
-	Model ourOcean4(FileSystem::getPath("resources/objects/todo/ocean4.obj"));
+	Model island(FileSystem::getPath("resources/objects/Island.obj"));
 
 	float skyboxVertices[] = {
 		// positions          
@@ -299,16 +296,16 @@ int main()
 			glCullFace(GL_FRONT);
 			
 			if (control % 40 < 10) {
-				renderScene(simpleDepthShader, ourModel3, ourOcean1);
+				renderScene(simpleDepthShader, ourModel3, island);
 			}
 			else if (control % 40 < 20) {
-				renderScene(simpleDepthShader, ourModel4, ourOcean2);
+				renderScene(simpleDepthShader, ourModel4, island);
 			}
 			else if (control % 40 < 30) {
-				renderScene(simpleDepthShader, ourModel5, ourOcean3);
+				renderScene(simpleDepthShader, ourModel5, island);
 			}
 			else {
-				renderScene(simpleDepthShader, ourModel6, ourOcean4);
+				renderScene(simpleDepthShader, ourModel6, island);
 			}
 			
 			glCullFace(GL_BACK);
@@ -338,16 +335,16 @@ int main()
 		
 		control++;
 		if (control % 40 < 10) {
-			renderScene(shader, ourModel3, ourOcean1);
+			renderScene(shader, ourModel3, island);
 		}
 		else if (control % 40 < 20) {
-			renderScene(shader, ourModel4, ourOcean2);
+			renderScene(shader, ourModel4, island);
 		}
 		else if (control % 40 < 30) {
-			renderScene(shader, ourModel5, ourOcean3);
+			renderScene(shader, ourModel5, island);
 		}
 		else {
-			renderScene(shader, ourModel6, ourOcean4);
+			renderScene(shader, ourModel6, island);
 		}
 		
 
@@ -396,8 +393,8 @@ void renderScene(const Shader &shader, Model ourModel, Model ourIsland)
 {
     //  floor
     glm::mat4 model = glm::mat4(1.0f);
-	model = glm::scale(model, glm::vec3(0.05));
-	model = glm::translate(model, glm::vec3(0.0f, -80.0f, 4.0));
+	model = glm::scale(model, glm::vec3(0.5));
+	model = glm::translate(model, glm::vec3(0.0f, 2.0f, 4.0f));
     shader.setMat4("model", model);
 	ourIsland.Draw(shader);
 
@@ -426,7 +423,7 @@ void renderScene(const Shader &shader, Model ourModel, Model ourIsland)
 	model = glm::translate(model, glm::vec3(1.0f, 0.2f, 1.0));
 	float time = glfwGetTime();
 	model = glm::rotate(model, (float)180.0, glm::vec3(0.0, 1.0, 0.0));
-	model = glm::scale(model, glm::vec3(0.15));
+	model = glm::scale(model, glm::vec3(0.02));
 	shader.setMat4("model", model);
 	ourModel.Draw(shader);
 }
