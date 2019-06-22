@@ -100,7 +100,7 @@ int main()
 	Model ourModel5(FileSystem::getPath("resources/objects/ghost10.obj"));
 	Model ourModel6(FileSystem::getPath("resources/objects/ghost11.obj"));
 
-	Model island(FileSystem::getPath("resources/objects/Island.obj"));
+	Model island(FileSystem::getPath("resources/objects/islandModel/Island.obj"));
 
 	float skyboxVertices[] = {
 		// positions          
@@ -393,8 +393,8 @@ void renderScene(const Shader &shader, Model ourModel, Model ourIsland)
 {
     //  floor
     glm::mat4 model = glm::mat4(1.0f);
-	model = glm::scale(model, glm::vec3(0.5));
-	model = glm::translate(model, glm::vec3(0.0f, 2.0f, 4.0f));
+	//model = glm::scale(model, glm::vec3(0.5));
+	model = glm::translate(model, glm::vec3(0.0f, 1.0f, 4.0f));
     shader.setMat4("model", model);
 	ourIsland.Draw(shader);
 
