@@ -9,14 +9,19 @@
 #include <learnopengl/filesystem.h>
 #include <learnopengl/shader.h>
 #include <learnopengl/camera.h>
-#include <learnopengl/model.h>
+//#include <learnopengl/model.h>
+#include "model.h"
+
+#include "imgui.h"
+#include "imgui_impl_glfw_gl3.h"
 
 #include <iostream>
+
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
-void processInput(GLFWwindow *window);
+void processInput(GLFWwindow *window,Model ourModel,Model island);
 unsigned int loadTexture(const char *path);
 void renderScene(const Shader &shader, Model ourModel, Model ourIsland);
 void renderCube();
@@ -38,9 +43,14 @@ bool firstMouse = true;
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
-
+bool is_view_mode = false;
+bool is_collision = false;
+glm::vec3 ghostPos = glm::vec3(0.5f, -2.8f, 1.2);
+glm::vec3 lastghostPos;
 // meshes
 unsigned int planeVAO;
+
+Camera_Movement ghost_move;
 
 int main()
 {
@@ -70,7 +80,7 @@ int main()
     glfwSetScrollCallback(window, scroll_callback);
 
     // tell GLFW to capture our mouse
-    glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+    //glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 
     // glad: load all OpenGL function pointers
     // ---------------------------------------
@@ -250,7 +260,14 @@ int main()
     // lighting info
     // -------------
     glm::vec3 lightPos(-2.0f, 4.0f, -1.0f);
-
+	float lpos[3] = { -2.0f, 4.0f, -1.0f };
+	bool is_run = true;
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO();
+	(void)io;
+	ImGui_ImplGlfwGL3_Init(window, true);
+	ImGui::StyleColorsDark();
     // render loop
     // -----------
     while (!glfwWindowShouldClose(window))
@@ -263,8 +280,17 @@ int main()
 
         // input
         // -----
-        processInput(window);
+        processInput(window,ourModel3,island);
+		ImGui_ImplGlfwGL3_NewFrame();
+		if (is_run)
+		{
+			ImGui::Begin("LightPos", &is_run);
 
+			ImGui::Text("Adjust parameters");
+
+			ImGui::SliderFloat3("Light Position", lpos, -30.0f, 30.0f);
+			ImGui::End();
+		}
         // change light position over time
         //lightPos.x = sin(glfwGetTime()) * 3.0f;
         //lightPos.z = cos(glfwGetTime()) * 2.0f;
@@ -274,7 +300,8 @@ int main()
         // ------
         glClearColor(0.9f, 1.0f, 1.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
+		
+		lightPos = glm::vec3(lpos[0], lpos[1], lpos[2]);
         // 1. render depth of scene to texture (from light's perspective)
         // --------------------------------------------------------------
         glm::mat4 lightProjection, lightView;
@@ -320,6 +347,14 @@ int main()
         glViewport(0, 0, SCR_WIDTH, SCR_HEIGHT);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         shader.use();
+        
+        ImGui::Begin("LightPos", &is_run);
+        
+        ImGui::Text("Adjust parameters");
+        
+        ImGui::SliderFloat("_fov", &camera.Zoom, -90.0f, 90.0f);
+        ImGui::End();
+        
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
         glm::mat4 view = camera.GetViewMatrix();
         shader.setMat4("projection", projection);
@@ -371,13 +406,15 @@ int main()
 		glBindVertexArray(0);
 		glDepthFunc(GL_LESS); // set depth function back to default
 
-
+		ImGui::Render();
+		ImGui_ImplGlfwGL3_RenderDrawData(ImGui::GetDrawData());
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
-
+	ImGui_ImplGlfwGL3_Shutdown();
+	ImGui::DestroyContext();
     // optional: de-allocate all resources once they've outlived their purpose:
     // ------------------------------------------------------------------------
     glDeleteVertexArrays(1, &planeVAO);
@@ -391,10 +428,7 @@ int main()
 // --------------------
 void renderScene(const Shader &shader, Model ourModel, Model ourIsland)
 {
-    //  floor
     glm::mat4 model = glm::mat4(1.0f);
-	//model = glm::scale(model, glm::vec3(0.5));
-	model = glm::translate(model, glm::vec3(0.0f, 1.0f, 4.0f));
     shader.setMat4("model", model);
 	ourIsland.Draw(shader);
 
@@ -420,10 +454,11 @@ void renderScene(const Shader &shader, Model ourModel, Model ourIsland)
     //renderCube();
 
 	model = glm::mat4(1.0f);
-	model = glm::translate(model, glm::vec3(1.0f, 0.2f, 1.0));
-	float time = glfwGetTime();
-	model = glm::rotate(model, (float)180.0, glm::vec3(0.0, 1.0, 0.0));
-	model = glm::scale(model, glm::vec3(0.02));
+	model = glm::translate(model, ghostPos);
+    model = glm::scale(model, glm::vec3(0.14));
+
+	model = glm::rotate(model, (float)-ghost_move*90.0f+40.0f, glm::vec3(0.0, 1.0, 0.0));
+	
 	shader.setMat4("model", model);
 	ourModel.Draw(shader);
 }
@@ -537,19 +572,57 @@ void renderQuad()
 
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
 // ---------------------------------------------------------------------------------------------------------
-void processInput(GLFWwindow *window)
+void processInput(GLFWwindow *window,Model ourModel,Model island)
 {
+//    cout<<ghostPos.x<<' '<<ghostPos.y<<' '<<ghostPos.z<<endl;
+//    cout<<ourModel.minPos.x<<' '<<ourModel.minPos.y<<' '<<ourModel.minPos.z<<endl;
+//    cout<<ourModel.maxPos.x<<' '<<ourModel.maxPos.y<<' '<<ourModel.maxPos.z<<endl;
+    is_collision=island.CheckCollision(ghostPos+ourModel.minPos*glm::vec3(0.14), ghostPos+ourModel.maxPos*glm::vec3(0.14));
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
+    
+    if(is_view_mode){
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS){
+            camera.ProcessKeyboard(FORWARD, deltaTime);
+        }
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS){
+            camera.ProcessKeyboard(BACKWARD, deltaTime);
+        }
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS){
+            camera.ProcessKeyboard(LEFT, deltaTime);
+        }
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS){
+            camera.ProcessKeyboard(RIGHT, deltaTime);
+        }
+    }
+    else if(!is_collision){
+        lastghostPos = ghostPos;
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS){
+            ghostPos.z -= 2.5 * deltaTime;
+            ghost_move = FORWARD;
+        }
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS){
+            ghostPos.z += 2.5 * deltaTime;
+            ghost_move = BACKWARD;
+        }
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS){
+            ghostPos.x -= 2.5 * deltaTime;
+            ghost_move = LEFT;
+        }
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS){
+            ghostPos.x += 2.5 * deltaTime;
+            ghost_move = RIGHT;
+        }
+        camera.Position = ghostPos + glm::vec3(0.7f, 4.0f, 4.0f);
+        camera.Front = -glm::vec3(0.7f, 4.0f, 4.0f);
+    }else{
+        ghostPos = lastghostPos;
+    }
+    
+    
+    if (glfwGetKey(window, GLFW_KEY_SPACE) == GLFW_PRESS)
+        is_view_mode = !is_view_mode;
 
-    if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
-        camera.ProcessKeyboard(FORWARD, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
-        camera.ProcessKeyboard(BACKWARD, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
-        camera.ProcessKeyboard(LEFT, deltaTime);
-    if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
-        camera.ProcessKeyboard(RIGHT, deltaTime);
 }
 
 // glfw: whenever the window size changed (by OS or user resize) this callback function executes
@@ -565,20 +638,22 @@ void framebuffer_size_callback(GLFWwindow* window, int width, int height)
 // -------------------------------------------------------
 void mouse_callback(GLFWwindow* window, double xpos, double ypos)
 {
-    if (firstMouse)
-    {
+    if(is_view_mode){
+        if (firstMouse)
+        {
+            lastX = xpos;
+            lastY = ypos;
+            firstMouse = false;
+        }
+
+        float xoffset = xpos - lastX;
+        float yoffset = lastY - ypos; // reversed since y-coordinates go from bottom to top
+
         lastX = xpos;
         lastY = ypos;
-        firstMouse = false;
+
+        camera.ProcessMouseMovement(xoffset, yoffset);
     }
-
-    float xoffset = xpos - lastX;
-    float yoffset = lastY - ypos; // reversed since y-coordinates go from bottom to top
-
-    lastX = xpos;
-    lastY = ypos;
-
-    camera.ProcessMouseMovement(xoffset, yoffset);
 }
 
 // glfw: whenever the mouse scroll wheel scrolls, this callback is called
