@@ -120,7 +120,8 @@
 		float lifetime;
 		float scale;
 		float dec;
-	};```
+	};
+	```
 	- 再创建一个类作为粒子系统发生粒子，在指定的XOZ平面，随机发射不同大小的雪花粒子
 	```class ParticleSystem {
 		private:
@@ -139,7 +140,8 @@
 			void Update(float dt, glm::vec3 pos);
 			void Draw(Shader &shader);
 
-		};```
+		};
+	```
 	- 粒子系统类使用vector来存储雪花粒子，通过遍历vecotor来更新粒子的物理属性
 	- 如果粒子生命周期减少到0或y坐标<0,更新粒子的属性到初始化的状态
 
