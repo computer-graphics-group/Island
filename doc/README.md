@@ -108,9 +108,38 @@
 骨骼动画，实现玩家的行走，并且想尽可能实现一些动物的穿跃  
 
 - 粒子效果  
-粒子效果，实现下雪场景 
+	- 粒子效果，实现下雪场景 
 	- 先创建一个结构体作为雪花粒子，定义粒子的物理属性：生命周期，速度，旋转，加速度，大小scale等属性
+	```
+	struct Particle {
+		glm::vec3 position;
+		glm::vec3 velocity;
+		glm::vec3 acceleration;
+		glm::vec2 rotateAngle;
+		float rotateSpeed;
+		float lifetime;
+		float scale;
+		float dec;
+	};```
 	- 再创建一个类作为粒子系统发生粒子，在指定的XOZ平面，随机发射不同大小的雪花粒子
+	```class ParticleSystem {
+		private:
+			//xoz平面，高度
+			float rangex, rangez, skyHeight;
+			int number;
+			//存储
+			vector<Particle> particles;
+			float lifetime, dec;
+			glm::vec3 position, velocity, acceleration, scale;
+			unsigned int VAO;
+		public:
+			//更新渲染
+			ParticleSystem(int number, glm::vec3 genPosition, float range_x, float range_z, float skyHeight);
+			void initParticleSystem();
+			void Update(float dt, glm::vec3 pos);
+			void Draw(Shader &shader);
+
+		};```
 	- 粒子系统类使用vector来存储雪花粒子，通过遍历vecotor来更新粒子的物理属性
 	- 如果粒子生命周期减少到0或y坐标<0,更新粒子的属性到初始化的状态
 
@@ -161,4 +190,4 @@
 ## 个人报告
 
 - [16340087黄悦](PersonalReports/16340087_Report.md)
-
+- [16340164吕雪萌](PersonalReports/16340164_Report.md)
