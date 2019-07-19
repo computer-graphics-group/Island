@@ -9,18 +9,24 @@
 #include <iostream>
 #include <learnopengl/shader.h>
 #include <stb_image.h>
-#include <learnopengl/filesystem.h>
+//#include <learnopengl/filesystem.h>
 using namespace std;
 
 struct Particle {
 	glm::vec3 position;
+	glm::vec4 color;
+	//v
 	glm::vec3 velocity;
+	//a
 	glm::vec3 acceleration;
 	glm::vec2 rotateAngle;
 	float rotateSpeed;
 	float lifetime;
 	float scale;
 	float dec;
+
+	Particle()
+		: position(0.0f), velocity(0.0f), color(1.0f), lifetime(1.0f), scale(0.05f), acceleration(0.2f), dec(1.0f), rotateAngle(0.0f), rotateSpeed(0.0f) { }
 };
 
 

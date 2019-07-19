@@ -51,7 +51,7 @@ public:
             meshes[i].Draw(shader);
     }
     
-    bool CheckCollision(glm::vec3 minPos,glm::vec3 maxPos){
+    bool CheckPosCollision(glm::vec3 minPos,glm::vec3 maxPos){
         for(unsigned int i = 0; i < positions.size(); i++){
             
             bool collisionX = positions[i].x > minPos.x && positions[i].x < maxPos.x;
@@ -62,7 +62,12 @@ public:
         }
         return false;
     }
-    
+    bool CheckAABBCollision(glm::vec3 _minPos,glm::vec3 _maxPos){
+        bool collisionX = maxPos.x > _minPos.x && _maxPos.x > minPos.x;
+        bool collisionY = maxPos.y > _minPos.y && _maxPos.y > minPos.y;
+        bool collisionZ = maxPos.z > _minPos.z && _maxPos.z > minPos.z;
+        return collisionX && collisionY && collisionZ;
+    }
 private:
     /*  Functions   */
     // loads a model with supported ASSIMP extensions from file and stores the resulting meshes in the meshes vector.

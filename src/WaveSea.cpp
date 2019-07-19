@@ -69,7 +69,7 @@ void WaveSea::Draw(glm::mat4 projection, glm::mat4 view, glm::vec3 position) {
 	//model = glm::translate(model, glm::vec3(x, y, z));
 	//model = glm::scale(model, glm::vec3(x1, y1, z1));
 
-	model = glm::translate(model, glm::vec3(-100.0f, -4.0f, -100.0f));
+	model = glm::translate(model, glm::vec3(-100.0f, -5.0f, -100.0f));
 	model = glm::scale(model, glm::vec3(300.0f, 20.0f, 300.0f));
 
 	shader.setMat4("model", model);
@@ -89,16 +89,16 @@ void WaveSea::initShader() {
 	shader.use();
 	for (int i = 0; i < waveCount; i++) {
 		char str1[40], str2[40], str3[40], str4[40];
-		sprintf_s(str1, "direction[%d]", i);
+		sprintf(str1, "direction[%d]", i);
 		shader.setVec2(str1, direction[i]);
 
-		sprintf_s(str2, "amplitude[%d]", i);
+		sprintf(str2, "amplitude[%d]", i);
 		shader.setFloat(str2, amplitude[i]);
 
-		sprintf_s(str3, "waveLength[%d]", i);
+		sprintf(str3, "waveLength[%d]", i);
 		shader.setFloat(str3, waveLength[i]);
 
-		sprintf_s(str4, "speed[%d]", i);
+		sprintf(str4, "speed[%d]", i);
 		shader.setFloat(str4, speed[i]);
 	}
 

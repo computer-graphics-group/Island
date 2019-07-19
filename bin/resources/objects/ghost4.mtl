@@ -1,0 +1,13 @@
+# Blender MTL File: 'ghost.blend'
+# Material Count: 1
+
+newmtl Material
+Ns 225.000000
+Ka 0.213333 0.213333 0.213333
+Kd 0.584610 0.860172 0.810991
+Ks 0.276190 0.276190 0.276190
+Ke 0.0 0.0 0.0
+Ni 1.450000
+d 1.000000
+illum 3
+map_Kd num2.jpg

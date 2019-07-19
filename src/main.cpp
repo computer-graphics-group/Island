@@ -15,42 +15,86 @@
 #include "imgui.h"
 #include "imgui_impl_glfw_gl3.h"
 
-#include <iostream>
+#include "snow.h"
+#include "TextRenderer.h"
 
+#include <iostream>
+#include "Mesh/myModel.h"
+#include "WaveSea.h"
 
 void framebuffer_size_callback(GLFWwindow* window, int width, int height);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset);
 void processInput(GLFWwindow *window,Model ourModel,Model island);
 unsigned int loadTexture(const char *path);
-void renderScene(const Shader &shader, Model ourModel, Model ourIsland);
+void renderScene(const Shader &shader, Model ourModel);
+void renderIsland(const Shader &shader, Model ourIsland);
+void renderWood(const Shader &shader, Model ghost, Model wood);
+
 void renderCube();
 void renderQuad();
 //skybox
 unsigned int loadCubemap(vector<std::string> faces);
 unsigned int control = 0;
 // settings
-const unsigned int SCR_WIDTH = 1280;
-const unsigned int SCR_HEIGHT = 720;
+const unsigned int SCR_WIDTH = 1200;
+const unsigned int SCR_HEIGHT = 800;
 
+int _time = 0;
+ParticleSystem *particleSystem = NULL;
+//
 // camera
 Camera camera(glm::vec3(1.0f, 0.1f, 2.0));
 float lastX = (float)SCR_WIDTH / 2.0;
 float lastY = (float)SCR_HEIGHT / 2.0;
 bool firstMouse = true;
-
+int wood_num = 0;
 // timing
 float deltaTime = 0.0f;
 float lastFrame = 0.0f;
 
 bool is_view_mode = false;
-bool is_collision = false;
-glm::vec3 ghostPos = glm::vec3(0.5f, -2.8f, 1.2);
+bool isSceneCollision = false;
+bool isWoodCollision[3] = {false,false,false};
+glm::vec3 ghostPos = glm::vec3(0.5f, -3.0f, 1.2);
 glm::vec3 lastghostPos;
 // meshes
 unsigned int planeVAO;
 
+// model frame
+vector<Model> frames;
+
 Camera_Movement ghost_move;
+
+void loadAnimation(vector<Model>& frames, std::string filename, unsigned int start, unsigned int end)
+{
+	char tmp[200];
+	for (int i = start; i <= end; i++)
+	{
+		if (i < 10)
+			sprintf(tmp, "_00000%d", i);
+		else if (i < 100)
+			sprintf(tmp, "_0000%d", i);
+		else if (i < 1000)
+			sprintf(tmp, "_000%d", i);
+		else if (i < 10000)
+			sprintf(tmp, "_00%d", i);
+		else if (i < 100000)
+			sprintf(tmp, "_0%d", i);
+		else if (i < 1000000)
+			sprintf(tmp, "_%d", i);
+		std::string tmp2(filename + tmp);
+		tmp2 += ".obj";
+		std::cout << tmp2 << std::endl;
+
+		Model ourModel(tmp2);
+		// unsigned int id = obj.load(tmp2);
+		frames.push_back(ourModel);
+	}
+}
+
+
+
 
 int main()
 {
@@ -99,19 +143,36 @@ int main()
     Shader shader("ShaderProgram/shadow_mapping.vs", "ShaderProgram/shadow_mapping.fs");
     Shader simpleDepthShader("ShaderProgram/shadow_mapping_depth.vs", "ShaderProgram/shadow_mapping_depth.fs");
     Shader debugDepthQuad("ShaderProgram/debug_quad.vs", "ShaderProgram/debug_quad_depth.fs");
-	//skybox
-	Shader skyboxShader("ShaderProgram/skyboxv.txt", "ShaderProgram/skyboxf.txt");
+    Shader textShader("ShaderProgram/text.vs", "ShaderProgram/text.fs");
+    //skybox
+    Shader skyboxShader("ShaderProgram/skyboxv.txt", "ShaderProgram/skyboxf.txt");
+    TextRenderer textRender;
+    //particlesystem
+    //Shader particleShader("ShaderProgram/particlev.txt", "ShaderProgram/particlef.txt");
+    Shader particleShader("ShaderProgram/particlev.txt", "ShaderProgram/particlef.txt");
+    
+	// 加载骨骼着色器
+	Shader skinning("ShaderProgram/skinning.vs", "ShaderProgram/shader.fs");
+	skinning.use();
+	skinning.setInt("texture_diffuse1", 0);
+	skinning.setInt("shadowMap", 1);
+
+	// 加载带有动画的模型
+	MyModel* am = new MyModel(glm::vec3(0.0f, -3.3f, 0.0f), -90.0f, glm::vec3(0.05, 0.05, 0.05), glm::vec3(1.0f, 0.0f, 0.0f));
+	am->initAnimation("./resources/animation/deer1.md5mesh", skinning);
+
+    //ParticleSystem
+    particleSystem = new ParticleSystem(200, glm::vec3(0.0f, 0.0f, 0.0f), 20.0f, 20.0f, 5.0f);
 	// load models
 // -----------
-	Model ourModel1(FileSystem::getPath("resources/objects/ghost6.obj"));
-	Model ourModel2(FileSystem::getPath("resources/objects/ghost7.obj"));
-	Model ourModel3(FileSystem::getPath("resources/objects/ghost8.obj"));
-	Model ourModel4(FileSystem::getPath("resources/objects/ghost9.obj"));
-	Model ourModel5(FileSystem::getPath("resources/objects/ghost10.obj"));
-	Model ourModel6(FileSystem::getPath("resources/objects/ghost11.obj"));
+	// load models
+	loadAnimation(frames, "resources/objects/ghostAnima/ghost", 16, 29);
 
 	Model island(FileSystem::getPath("resources/objects/islandModel/Island.obj"));
-
+    Model wood(FileSystem::getPath("resources/objects/islandModel/wood.obj"));
+    
+    WaveSea sea;
+    
 	float skyboxVertices[] = {
 		// positions          
 		-1.0f,  1.0f, -1.0f,
@@ -169,15 +230,33 @@ int main()
 
 	//skybox jpg
 
-	vector<std::string> faces
-	{
-		"resources/textures/skybox/right.jpg",
-		"resources/textures/skybox/left.jpg",
-		"resources/textures/skybox/top.jpg",
-		"resources/textures/skybox/bottom.jpg",
-		"resources/textures/skybox/front.jpg",
-		"resources/textures/skybox/back.jpg"
-	};
+    vector<std::string> mid
+    {
+        "resources/textures/skybox/sea_ft1.jpg",
+        "resources/textures/skybox/sea_bk1.jpg",
+        "resources/textures/skybox/sea_up1.jpg",
+        "resources/textures/skybox/sea_dn.jpg",
+        "resources/textures/skybox/sea_rt1.jpg",
+        "resources/textures/skybox/sea_lf1.jpg"
+    };
+    vector<std::string> night
+    {
+        "resources/textures/skybox/sea_ft2.jpg",
+        "resources/textures/skybox/sea_bk2.jpg",
+        "resources/textures/skybox/sea_up2.jpg",
+        "resources/textures/skybox/sea_dn.jpg",
+        "resources/textures/skybox/sea_rt2.jpg",
+        "resources/textures/skybox/sea_lf2.jpg"
+    };
+    vector<std::string> faces
+    {
+        "resources/textures/skybox/sea_ft.jpg",
+        "resources/textures/skybox/sea_bk.jpg",
+        "resources/textures/skybox/sea_up.jpg",
+        "resources/textures/skybox/sea_dn.jpg",
+        "resources/textures/skybox/sea_rt.jpg",
+        "resources/textures/skybox/sea_lf.jpg"
+    };
 	
 	/*
 	vector<std::string> faces
@@ -190,7 +269,9 @@ int main()
 		"../resources/textures/skybox/lake1_bk.jpg"
 	};
 	*/
-	unsigned int cubemapTexture = loadCubemap(faces);
+    unsigned int cubemapTexture = loadCubemap(faces);
+    unsigned int nightTexture = loadCubemap(night);
+    unsigned int midTexture = loadCubemap(mid);
     // set up vertex data (and buffer(s)) and configure vertex attributes
     // ------------------------------------------------------------------
     float planeVertices[] = {
@@ -261,13 +342,14 @@ int main()
     // -------------
     glm::vec3 lightPos(-2.0f, 4.0f, -1.0f);
 	float lpos[3] = { -2.0f, 4.0f, -1.0f };
-	bool is_run = true;
-	IMGUI_CHECKVERSION();
-	ImGui::CreateContext();
-	ImGuiIO& io = ImGui::GetIO();
-	(void)io;
-	ImGui_ImplGlfwGL3_Init(window, true);
-	ImGui::StyleColorsDark();
+//    bool is_run = true;
+//    bool change = false;
+//    IMGUI_CHECKVERSION();
+//    ImGui::CreateContext();
+//    ImGuiIO& io = ImGui::GetIO();
+//    (void)io;
+//    ImGui_ImplGlfwGL3_Init(window, true);
+//    ImGui::StyleColorsDark();
     // render loop
     // -----------
     while (!glfwWindowShouldClose(window))
@@ -280,17 +362,17 @@ int main()
 
         // input
         // -----
-        processInput(window,ourModel3,island);
-		ImGui_ImplGlfwGL3_NewFrame();
-		if (is_run)
-		{
-			ImGui::Begin("LightPos", &is_run);
-
-			ImGui::Text("Adjust parameters");
-
-			ImGui::SliderFloat3("Light Position", lpos, -30.0f, 30.0f);
-			ImGui::End();
-		}
+        processInput(window, frames[0],island);
+//        ImGui_ImplGlfwGL3_NewFrame();
+//        if (is_run)
+//        {
+//            ImGui::Begin("LightPos", &is_run);
+//
+//            ImGui::Text("Adjust parameters");
+//
+//            ImGui::SliderFloat3("Light Position", lpos, -30.0f, 30.0f);
+//            ImGui::End();
+//        }
         // change light position over time
         //lightPos.x = sin(glfwGetTime()) * 3.0f;
         //lightPos.z = cos(glfwGetTime()) * 2.0f;
@@ -315,6 +397,7 @@ int main()
         simpleDepthShader.use();
         simpleDepthShader.setMat4("lightSpaceMatrix", lightSpaceMatrix);
 
+
         glViewport(0, 0, SHADOW_WIDTH, SHADOW_HEIGHT);
         glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
             glClear(GL_DEPTH_BUFFER_BIT);
@@ -322,19 +405,12 @@ int main()
             //glBindTexture(GL_TEXTURE_2D, woodTexture);
 			glCullFace(GL_FRONT);
 			
-			if (control % 40 < 10) {
-				renderScene(simpleDepthShader, ourModel3, island);
-			}
-			else if (control % 40 < 20) {
-				renderScene(simpleDepthShader, ourModel4, island);
-			}
-			else if (control % 40 < 30) {
-				renderScene(simpleDepthShader, ourModel5, island);
-			}
-			else {
-				renderScene(simpleDepthShader, ourModel6, island);
-			}
-			
+		int index = (control / 2) % 14;
+		renderScene(simpleDepthShader, frames[index]);
+        renderIsland(simpleDepthShader, island);
+        renderWood(simpleDepthShader, frames[0],wood);
+		am->Render(simpleDepthShader);
+
 			glCullFace(GL_BACK);
         glBindFramebuffer(GL_FRAMEBUFFER, 0);
 
@@ -348,12 +424,12 @@ int main()
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
         shader.use();
         
-        ImGui::Begin("LightPos", &is_run);
-        
-        ImGui::Text("Adjust parameters");
-        
-        ImGui::SliderFloat("_fov", &camera.Zoom, -90.0f, 90.0f);
-        ImGui::End();
+//        ImGui::Begin("LightPos", &is_run);
+//
+//        ImGui::Text("Adjust parameters");
+//
+//        ImGui::SliderFloat("_fov", &camera.Zoom, -90.0f, 90.0f);
+//        ImGui::End();
         
         glm::mat4 projection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
         glm::mat4 view = camera.GetViewMatrix();
@@ -368,20 +444,26 @@ int main()
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, depthMap);
 		
-		control++;
-		if (control % 40 < 10) {
-			renderScene(shader, ourModel3, island);
-		}
-		else if (control % 40 < 20) {
-			renderScene(shader, ourModel4, island);
-		}
-		else if (control % 40 < 30) {
-			renderScene(shader, ourModel5, island);
-		}
-		else {
-			renderScene(shader, ourModel6, island);
-		}
-		
+        control++;
+		renderScene(shader, frames[index]);
+        renderIsland(shader, island);
+        renderWood(shader, frames[0],wood);
+
+		skinning.use();
+		skinning.setMat4("projection", projection);
+		skinning.setMat4("view", view);
+		// 设置光的参数
+		skinning.setVec3("viewPos", camera.Position);
+		skinning.setVec3("lightPos", lightPos);
+		skinning.setMat4("lightSpaceMatrix", lightSpaceMatrix);
+		glActiveTexture(GL_TEXTURE0);
+		// glBindTexture(GL_TEXTURE_2D, ResourceManager::GetTexture("glass"));
+		glActiveTexture(GL_TEXTURE1);
+		glBindTexture(GL_TEXTURE_2D, depthMap);
+
+		am->UpdateBone(glfwGetTime());
+		am->Render(skinning);
+
 
         // render Depth map to quad for visual debugging
         // ---------------------------------------------
@@ -392,29 +474,67 @@ int main()
         glBindTexture(GL_TEXTURE_2D, depthMap);
         //renderQuad();
 
-		// draw skybox as last
-		glDepthFunc(GL_LEQUAL);  // change depth function so depth test passes when values are equal to depth buffer's content
-		skyboxShader.use();
-		view = glm::mat4(glm::mat3(camera.GetViewMatrix())); // remove translation from the view matrix
-		skyboxShader.setMat4("view", view);
-		skyboxShader.setMat4("projection", projection);
-		// skybox cube
-		glBindVertexArray(skyboxVAO);
-		glActiveTexture(GL_TEXTURE0);
-		glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
-		glDrawArrays(GL_TRIANGLES, 0, 36);
-		glBindVertexArray(0);
-		glDepthFunc(GL_LESS); // set depth function back to default
-
-		ImGui::Render();
-		ImGui_ImplGlfwGL3_RenderDrawData(ImGui::GetDrawData());
+        //particleSystem
+		
+        particleSystem->Update(deltaTime, camera.Position);
+        //draw
+        glm::mat4 pprojection(1.0f);
+        glm::mat4 pview = camera.GetViewMatrix();
+        pprojection = glm::perspective(glm::radians(camera.Zoom), (float)SCR_WIDTH / (float)SCR_HEIGHT, 0.1f, 100.0f);
+        particleShader.use();
+        particleShader.setMat4("projection", pprojection);
+        particleShader.setMat4("view", pview);
+        particleSystem->Draw(particleShader);
+        
+        // draw skybox as last
+        glDepthFunc(GL_LEQUAL);  // change depth function so depth test passes when values are equal to depth buffer's content
+        skyboxShader.use();
+        view = glm::mat4(glm::mat3(camera.GetViewMatrix())); // remove translation from the view matrix
+        skyboxShader.setMat4("view", view);
+        skyboxShader.setMat4("projection", projection);
+        // skybox cube
+        glBindVertexArray(skyboxVAO);
+        glActiveTexture(GL_TEXTURE0);
+        if (_time < 1000) {
+            //glBindTexture(GL_TEXTURE_CUBE_MAP, nightTexture);
+            glBindTexture(GL_TEXTURE_CUBE_MAP, cubemapTexture);
+            _time += 4;
+        }
+        else if (_time < 1500) {
+            //glBindTexture(GL_TEXTURE_CUBE_MAP, nightTexture);
+            glBindTexture(GL_TEXTURE_CUBE_MAP, midTexture);
+            _time += 4;
+        }
+        else {
+            glBindTexture(GL_TEXTURE_CUBE_MAP, nightTexture);
+            _time += 4;
+        }
+        if (_time > 3000) {
+            _time = 0;
+        }
+        glDrawArrays(GL_TRIANGLES, 0, 36);
+        glBindVertexArray(0);
+        glDepthFunc(GL_LESS); // set depth function back to default
+        
+        
+        //Œƒ◊÷‰÷»æ
+        textRender.RenderWoodNum(textShader, wood_num);
+        
+        textRender.setSize(SCR_WIDTH, SCR_HEIGHT);
+        if (wood_num == 3) {
+            textRender.RenderText(textShader, "YOU ARE SAVED", SCR_WIDTH / 2 - 400, SCR_HEIGHT / 2, 2.0, glm::vec3(1.0f, 0.5f, 0.0f));
+        }
+        
+        sea.Draw(projection, camera.GetViewMatrix(), camera.Position);
+//        ImGui::Render();
+//        ImGui_ImplGlfwGL3_RenderDrawData(ImGui::GetDrawData());
         // glfw: swap buffers and poll IO events (keys pressed/released, mouse moved etc.)
         // -------------------------------------------------------------------------------
         glfwSwapBuffers(window);
         glfwPollEvents();
     }
-	ImGui_ImplGlfwGL3_Shutdown();
-	ImGui::DestroyContext();
+//    ImGui_ImplGlfwGL3_Shutdown();
+//    ImGui::DestroyContext();
     // optional: de-allocate all resources once they've outlived their purpose:
     // ------------------------------------------------------------------------
     glDeleteVertexArrays(1, &planeVAO);
@@ -426,117 +546,55 @@ int main()
 
 // renders the 3D scene
 // --------------------
-void renderScene(const Shader &shader, Model ourModel, Model ourIsland)
+
+void renderIsland(const Shader &shader, Model ourIsland)
+{
+    //  floor
+    glm::mat4 model = glm::mat4(1.0f);
+    //model = glm::scale(model, glm::vec3(0.5));
+   // model = glm::translate(model, glm::vec3(0.0f, 1.0f, 4.0f));
+    shader.setMat4("model", model);
+    ourIsland.Draw(shader);
+    
+}
+void renderWood(const Shader &shader, Model ghost, Model wood)
+{
+    //  floor
+    glm::vec3 trans[3]={
+        glm::vec3(0.0f, 0.0f, 0.0f),
+        glm::vec3(8.0f, 0.0f, 10.0f),
+        glm::vec3(2.0f, 0.0f, 15.0f)
+    };
+    for(int i=0;i<3;i++){
+        if(isWoodCollision[i]){
+            continue;
+        }
+        
+        bool isCollision = wood.CheckAABBCollision(ghostPos+ghost.minPos*glm::vec3(0.14)+glm::vec3(0.0f,-1.0f,0.0f)-trans[i], ghostPos+ghost.maxPos*glm::vec3(0.14)-trans[i]);
+        if(!isCollision){
+            glm::mat4 model = glm::mat4(1.0f);
+            //model = glm::scale(model, glm::vec3(0.5));
+            model = glm::translate(model, trans[i]);
+            shader.setMat4("model", model);
+            wood.Draw(shader);
+        }
+        else{
+            isWoodCollision[i] = true;
+            wood_num++;
+        }
+    }
+
+}
+void renderScene(const Shader &shader, Model ourModel)
 {
     glm::mat4 model = glm::mat4(1.0f);
-    shader.setMat4("model", model);
-	ourIsland.Draw(shader);
-
-    //glBindVertexArray(planeVAO);
-    //glDrawArrays(GL_TRIANGLES, 0, 6);
-
-    // cubes
-    //model = glm::mat4(1.0f);
-    //model = glm::translate(model, glm::vec3(0.0f, 1.5f, 0.0));
-    //model = glm::scale(model, glm::vec3(0.5f));
-    //shader.setMat4("model", model);
-    //renderCube();
-    //model = glm::mat4(1.0f);
-    //model = glm::translate(model, glm::vec3(2.0f, 0.0f, 1.0));
-    //model = glm::scale(model, glm::vec3(0.5f));
-    //shader.setMat4("model", model);
-    //renderCube();
-    //model = glm::mat4(1.0f);
-    //model = glm::translate(model, glm::vec3(-1.0f, 0.0f, 2.0));
-    //model = glm::rotate(model, glm::radians(60.0f), glm::normalize(glm::vec3(1.0, 0.0, 1.0)));
-    //model = glm::scale(model, glm::vec3(0.25));
-    //shader.setMat4("model", model);
-    //renderCube();
-
-	model = glm::mat4(1.0f);
-	model = glm::translate(model, ghostPos);
+    model = glm::translate(model, ghostPos);
     model = glm::scale(model, glm::vec3(0.14));
-
-	model = glm::rotate(model, (float)-ghost_move*90.0f+40.0f, glm::vec3(0.0, 1.0, 0.0));
-	
-	shader.setMat4("model", model);
-	ourModel.Draw(shader);
-}
-
-
-// renderCube() renders a 1x1 3D cube in NDC.
-// -------------------------------------------------
-unsigned int cubeVAO = 0;
-unsigned int cubeVBO = 0;
-void renderCube()
-{
-    // initialize (if necessary)
-    if (cubeVAO == 0)
-    {
-        float vertices[] = {
-            // back face
-            -1.0f, -1.0f, -1.0f,  0.0f,  0.0f, -1.0f, 0.0f, 0.0f, // bottom-left
-             1.0f,  1.0f, -1.0f,  0.0f,  0.0f, -1.0f, 1.0f, 1.0f, // top-right
-             1.0f, -1.0f, -1.0f,  0.0f,  0.0f, -1.0f, 1.0f, 0.0f, // bottom-right         
-             1.0f,  1.0f, -1.0f,  0.0f,  0.0f, -1.0f, 1.0f, 1.0f, // top-right
-            -1.0f, -1.0f, -1.0f,  0.0f,  0.0f, -1.0f, 0.0f, 0.0f, // bottom-left
-            -1.0f,  1.0f, -1.0f,  0.0f,  0.0f, -1.0f, 0.0f, 1.0f, // top-left
-            // front face
-            -1.0f, -1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 0.0f, 0.0f, // bottom-left
-             1.0f, -1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 1.0f, 0.0f, // bottom-right
-             1.0f,  1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 1.0f, 1.0f, // top-right
-             1.0f,  1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 1.0f, 1.0f, // top-right
-            -1.0f,  1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 0.0f, 1.0f, // top-left
-            -1.0f, -1.0f,  1.0f,  0.0f,  0.0f,  1.0f, 0.0f, 0.0f, // bottom-left
-            // left face
-            -1.0f,  1.0f,  1.0f, -1.0f,  0.0f,  0.0f, 1.0f, 0.0f, // top-right
-            -1.0f,  1.0f, -1.0f, -1.0f,  0.0f,  0.0f, 1.0f, 1.0f, // top-left
-            -1.0f, -1.0f, -1.0f, -1.0f,  0.0f,  0.0f, 0.0f, 1.0f, // bottom-left
-            -1.0f, -1.0f, -1.0f, -1.0f,  0.0f,  0.0f, 0.0f, 1.0f, // bottom-left
-            -1.0f, -1.0f,  1.0f, -1.0f,  0.0f,  0.0f, 0.0f, 0.0f, // bottom-right
-            -1.0f,  1.0f,  1.0f, -1.0f,  0.0f,  0.0f, 1.0f, 0.0f, // top-right
-            // right face
-             1.0f,  1.0f,  1.0f,  1.0f,  0.0f,  0.0f, 1.0f, 0.0f, // top-left
-             1.0f, -1.0f, -1.0f,  1.0f,  0.0f,  0.0f, 0.0f, 1.0f, // bottom-right
-             1.0f,  1.0f, -1.0f,  1.0f,  0.0f,  0.0f, 1.0f, 1.0f, // top-right         
-             1.0f, -1.0f, -1.0f,  1.0f,  0.0f,  0.0f, 0.0f, 1.0f, // bottom-right
-             1.0f,  1.0f,  1.0f,  1.0f,  0.0f,  0.0f, 1.0f, 0.0f, // top-left
-             1.0f, -1.0f,  1.0f,  1.0f,  0.0f,  0.0f, 0.0f, 0.0f, // bottom-left     
-            // bottom face
-            -1.0f, -1.0f, -1.0f,  0.0f, -1.0f,  0.0f, 0.0f, 1.0f, // top-right
-             1.0f, -1.0f, -1.0f,  0.0f, -1.0f,  0.0f, 1.0f, 1.0f, // top-left
-             1.0f, -1.0f,  1.0f,  0.0f, -1.0f,  0.0f, 1.0f, 0.0f, // bottom-left
-             1.0f, -1.0f,  1.0f,  0.0f, -1.0f,  0.0f, 1.0f, 0.0f, // bottom-left
-            -1.0f, -1.0f,  1.0f,  0.0f, -1.0f,  0.0f, 0.0f, 0.0f, // bottom-right
-            -1.0f, -1.0f, -1.0f,  0.0f, -1.0f,  0.0f, 0.0f, 1.0f, // top-right
-            // top face
-            -1.0f,  1.0f, -1.0f,  0.0f,  1.0f,  0.0f, 0.0f, 1.0f, // top-left
-             1.0f,  1.0f , 1.0f,  0.0f,  1.0f,  0.0f, 1.0f, 0.0f, // bottom-right
-             1.0f,  1.0f, -1.0f,  0.0f,  1.0f,  0.0f, 1.0f, 1.0f, // top-right     
-             1.0f,  1.0f,  1.0f,  0.0f,  1.0f,  0.0f, 1.0f, 0.0f, // bottom-right
-            -1.0f,  1.0f, -1.0f,  0.0f,  1.0f,  0.0f, 0.0f, 1.0f, // top-left
-            -1.0f,  1.0f,  1.0f,  0.0f,  1.0f,  0.0f, 0.0f, 0.0f  // bottom-left        
-        };
-        glGenVertexArrays(1, &cubeVAO);
-        glGenBuffers(1, &cubeVBO);
-        // fill buffer
-        glBindBuffer(GL_ARRAY_BUFFER, cubeVBO);
-        glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-        // link vertex attributes
-        glBindVertexArray(cubeVAO);
-        glEnableVertexAttribArray(0);
-        glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
-        glEnableVertexAttribArray(1);
-        glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
-        glEnableVertexAttribArray(2);
-        glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
-        glBindBuffer(GL_ARRAY_BUFFER, 0);
-        glBindVertexArray(0);
-    }
-    // render Cube
-    glBindVertexArray(cubeVAO);
-    glDrawArrays(GL_TRIANGLES, 0, 36);
-    glBindVertexArray(0);
+    
+    model = glm::rotate(model, (float)-ghost_move*90.0f+40.0f, glm::vec3(0.0, 1.0, 0.0));
+    
+    shader.setMat4("model", model);
+    ourModel.Draw(shader);
 }
 
 // renderQuad() renders a 1x1 XY quad in NDC
@@ -574,10 +632,7 @@ void renderQuad()
 // ---------------------------------------------------------------------------------------------------------
 void processInput(GLFWwindow *window,Model ourModel,Model island)
 {
-//    cout<<ghostPos.x<<' '<<ghostPos.y<<' '<<ghostPos.z<<endl;
-//    cout<<ourModel.minPos.x<<' '<<ourModel.minPos.y<<' '<<ourModel.minPos.z<<endl;
-//    cout<<ourModel.maxPos.x<<' '<<ourModel.maxPos.y<<' '<<ourModel.maxPos.z<<endl;
-    is_collision=island.CheckCollision(ghostPos+ourModel.minPos*glm::vec3(0.14), ghostPos+ourModel.maxPos*glm::vec3(0.14));
+	isSceneCollision=island.CheckPosCollision(ghostPos+ourModel.minPos*glm::vec3(0.14)+glm::vec3(0.0f,1.0f,0.0f), ghostPos+ourModel.maxPos*glm::vec3(0.14));
     if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS)
         glfwSetWindowShouldClose(window, true);
     
@@ -595,7 +650,7 @@ void processInput(GLFWwindow *window,Model ourModel,Model island)
             camera.ProcessKeyboard(RIGHT, deltaTime);
         }
     }
-    else if(!is_collision){
+    else if(!isSceneCollision){
         lastghostPos = ghostPos;
         if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS){
             ghostPos.z -= 2.5 * deltaTime;
@@ -613,8 +668,8 @@ void processInput(GLFWwindow *window,Model ourModel,Model island)
             ghostPos.x += 2.5 * deltaTime;
             ghost_move = RIGHT;
         }
-        camera.Position = ghostPos + glm::vec3(0.7f, 4.0f, 4.0f);
-        camera.Front = -glm::vec3(0.7f, 4.0f, 4.0f);
+        camera.Position = ghostPos + glm::vec3(0.7f, 2.0f, 10.0f);
+        camera.Front = -glm::vec3(0.7f, 0.0f, 10.0f);
     }else{
         ghostPos = lastghostPos;
     }
@@ -646,8 +701,8 @@ void mouse_callback(GLFWwindow* window, double xpos, double ypos)
             firstMouse = false;
         }
 
-        float xoffset = xpos - lastX;
-        float yoffset = lastY - ypos; // reversed since y-coordinates go from bottom to top
+        float xoffset = 10*(xpos - lastX);
+        float yoffset = 10 * (lastY - ypos); // reversed since y-coordinates go from bottom to top
 
         lastX = xpos;
         lastY = ypos;
